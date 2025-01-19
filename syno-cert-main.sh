@@ -1,5 +1,7 @@
 #DRY_RUN="echo DRY_RUN"
-RELOAD_NGINX=YES
+
+# TODO figure out if nginx reload is enough, otherwise issue a restart
+SYSTEMCTL_NGINX_CMD=reload
 
 SCRIPT_DIR=$(dirname $0)
 
@@ -45,15 +47,11 @@ $DRY_RUN python3 $SCRIPT_DIR/update-syno-cert.py
 ##### ????????????????????????????????????????????????????
 ##### reload or restart nginx ????
 
-# DSM 7 uses systemctl
-if [[ $RELOAD_NGINX == "YES" ]]; then
-  RC_NGINX="systemctl reload nginx"
-  echo "INFO need to reload nxing, running $RC_NGINX"
-  $DRY_RUN $RC_NGINX
-  [ $? -ne 0 ] && ((EXIT_CODE++)) || true
-else
-  echo "INFO not running $RC_NGINX because $RELOAD_NGINX != YES"
-fi
+# DSM 7 uses systemctl, make nginx use new certificate
+RC_NGINX="systemctl ${SYSTEMCTL_NGINX_CMD} nginx"
+echo "INFO need to ${SYSTEMCTL_NGINX_CMD} nxing, running $RC_NGINX"
+$DRY_RUN $RC_NGINX
+[ $? -ne 0 ] && ((EXIT_CODE++)) || true
 
 SWAG_LE_LIVE_PRIVKEY_PEM_MD5=$(cat $SWAG_LE_LIVE_PRIVKEY_PEM_FILE | md5sum | sed -e 's/ .*//g')
 

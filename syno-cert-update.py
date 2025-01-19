@@ -14,36 +14,54 @@
 #     cd synology-api-master
 #     python3 setup.py install --force
 #
+import configparser
 import json
 import sys
 from datetime import datetime, timedelta
 from synology_api import core_certificate
 
-# Define docker swag letsencrypt live root dir
-docker_swag_le_live = "/volume1/docker/swag/etc/letsencrypt/live"
+# Path to configuration file
+config_ini_file = 'syno-cert-update.ini'
 
-# Set your certificate name, if no wildcard_domain use => wildcard_domain = ''
-primary_domain = 'yourdomain.com'
-wildcard_domain = f'*.{primary_domain}'
+# Load INI configuration
+config_settings = configparser.ConfigParser()
+config_settings.read(config_ini_file)
 
-# Set the number of days remaining for current cert to upload the new cert
-days_to_expiration = 7
+# Accessing configuration values from [connect] section
+connect_section = config_settings['connect']
+hostname = connect_section.get('hostname')
+port = connect_section.get('port', '5001')
+username = connect_section.get('username', 'default_user')
+password = connect_section.get('password', 'default_password')
+secure = connect_section.getboolean('secure', True)
+cert_verify = connect_section.getboolean('cert_verify', False)
+dsm_version = connect_section.getint('dsm_version', 7)
+connect_debug = connect_section.getboolean('debug', False)
+if connect_debug:
+    print("connect =>", dict(connect_section), "\n")
 
-# How to connect to your Synology server, hostname or IP address
-hostname = 'nas.yourdomain.com'
-port = '5001'
-username = 'admin'
-password = ''
-secure = True
-cert_verify = False
-dsm_version = 7
-debug = True
+# Accessing configuration values from [certificate] section
+certificate_section = config_settings['certificate']
+primary_domain = certificate_section.get('primary_domain')
+have_wildcard_domain = certificate_section.getboolean('have_wildcard_domain', True)
+days_to_expiration = certificate_section.getint('days_to_expiration', 1)
+set_certificate_as_default = certificate_section.getboolean('set_certificate_as_default', True)
+certificate_debug = certificate_section.get('debug', False)
+if certificate_debug:
+    print("certificate =>", dict(certificate_section), "\n")
 
-# Set new certificate as default or not
-set_certificate_as_default = True
+# Accessing configuration values from [docker] section
+docker_section = config_settings['docker']
+docker_swag_le_live = docker_section.get('docker_swag_le_live_dir')
+docker_debug = docker_section.get('debug', False)
+if docker_debug:
+    print("docker =>", dict(docker_section), "\n")
 
-###################################################################################
-###################################################################################
+# Set or don't set wildcard_domain var
+if have_wildcard_domain:
+    wildcard_domain = f'*.{primary_domain}'
+else:
+    wildcard_domain = ''
 
 # Construct private key and certificates path using the base docker_swag_le_live
 private_key_path = f"{docker_swag_le_live}/{primary_domain}/privkey.pem"
@@ -67,7 +85,7 @@ syn = core_certificate.Certificate(
     secure,
     cert_verify,
     dsm_version,
-    debug
+    connect_debug
 )
 
 # Request current certificates list
@@ -129,7 +147,6 @@ syn.delete_certificate(current_certificate_id)
 
 # Get latest certificates list
 certificate_list = syn.list_cert()
-
 # Get new certificate id
 new_certificate_id = certificate_list["data"]["certificates"][0]["id"]
 print("New certificate ID:" + new_certificate_id)
