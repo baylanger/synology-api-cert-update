@@ -4,6 +4,11 @@
 #  WORK IN PROGRESS
 #  ----------------
 #
+#  TODO
+#  ----
+#  . Allow first time certificate upload, i.e. don't delete old cert since there was none!
+#  . Allow via config to cleanup (delete) any expired certs
+#  . Allow via config to cleanup (delete) any certs not assigned to any service
 #
 # Requires https://github.com/N4S4/synology-api/
 #   Download zip file
@@ -143,7 +148,10 @@ syn.upload_cert(
 
 # Delete old certificate, we should probably delete any matching domain that isn't assigned
 # to any services
-syn.delete_certificate(current_certificate_id)
+
+# Delete current (now previous) certicate only if the uploaded cert is set as default
+if set_certificate_as_default:
+    syn.delete_certificate(current_certificate_id)
 
 # Get latest certificates list
 certificate_list = syn.list_cert()
