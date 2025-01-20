@@ -4,11 +4,6 @@
 #  WORK IN PROGRESS
 #  ----------------
 #
-#  TODO
-#  ----
-#  . Allow first time certificate upload, i.e. don't delete old cert since there was none!
-#  . Allow via config to cleanup (delete) any expired certs
-#  . Allow via config to cleanup (delete) any certs not assigned to any service
 #
 # Requires https://github.com/N4S4/synology-api/
 #   Download zip file
@@ -21,8 +16,12 @@
 #
 import configparser
 import json
+import os
+import subprocess
 import sys
+import time
 from datetime import datetime, timedelta
+from pathlib import Path
 from synology_api import core_certificate
 
 # Path to configuration file
@@ -57,10 +56,14 @@ if certificate_debug:
 
 # Accessing configuration values from [docker] section
 docker_section = config_settings['docker']
-docker_swag_le_live = docker_section.get('docker_swag_le_live_dir')
+docker_swag_le_live_dir = docker_section.get('docker_swag_le_live_dir')
 docker_debug = docker_section.get('debug', False)
 if docker_debug:
     print("docker =>", dict(docker_section), "\n")
+
+# Retrieve SYSTEMCTL_NGINX_CMD from the ini file
+control_section = config_settings['control']
+systemctl_nginx_cmd = control_section.get('systemctl_nginx_cmd', 'reload')
 
 # Set or don't set wildcard_domain var
 if have_wildcard_domain:
@@ -68,10 +71,48 @@ if have_wildcard_domain:
 else:
     wildcard_domain = ''
 
-# Construct private key and certificates path using the base docker_swag_le_live
-private_key_path = f"{docker_swag_le_live}/{primary_domain}/privkey.pem"
-server_certificate_path = f"{docker_swag_le_live}/{primary_domain}/cert.crt"
-ca_certificate_path = f"{docker_swag_le_live}/{primary_domain}/chain.crt"
+# Construct paths using os.path.join
+#private_key_path = os.path.join(docker_swag_le_live_dir, primary_domain, 'privkey.pem')
+#server_certificate_path = os.path.join(docker_swag_le_live_dir, primary_domain, 'cert.crt')
+#ca_certificate_path = os.path.join(docker_swag_le_live_dir, primary_domain, 'chain.crt')
+#upload_cert_time_path = os.path.join(docker_swag_le_live_dir, primary_domain, '.upload-cert-time')
+
+private_key_path = Path(docker_swag_le_live_dir) / primary_domain / "privkey.pem"
+server_certificate_path = Path(docker_swag_le_live_dir) / primary_domain / "cert.crt"
+ca_certificate_path = Path(docker_swag_le_live_dir) / primary_domain / "chain.crt"
+upload_cert_time_path = Path(docker_swag_le_live_dir) / ".upload-cert-time"
+
+if certificate_debug:
+    # Log paths for debugging
+    print(f"INFO: Private Key Path: {private_key_path}")
+    print(f"INFO: Server Certificate Path: {server_certificate_path}")
+    print(f"INFO: CA Certificate Path: {ca_certificate_path}")
+    print(f"INFO: Upload Certificate Time Path: {upload_cert_time_path}")
+
+# Ensure .upload-cert-time file exists with an old timestamp if not already present
+if not upload_cert_time_path.exists():
+    os.system(f"/bin/touch -t 200001010000.00 {upload_cert_time_path}")
+    print(f"INFO: Created .upload-cert-time file with timestamp 200001010000.00")
+
+# Check if current privkey.pem is newer than .upload-cert-time
+newer_files = list(Path(private_key_path).parent.glob('privkey.pem'))
+if newer_files and any(f.stat().st_mtime > upload_cert_time_path.stat().st_mtime for f in newer_files):
+    print(f"INFO: {primary_domain} certificate has rotated, proceeding to update certificate for all services")
+else:
+    print(f"INFO: {primary_domain} certificate has not rotated yet, nothing to do")
+    sys.exit(0)
+
+# Create cert.crt from cert.pem
+cert_pem_path = os.path.join(docker_swag_le_live_dir, primary_domain, 'cert.pem')
+subprocess.run(['openssl', 'x509', '-outform', 'der', '-in', cert_pem_path, '-out', server_certificate_path], check=True)
+if certificate_debug:
+    print("INFO: Created cert.crt from cert.pem")
+
+# Create chain.crt from chain.pem
+chain_pem_path = os.path.join(docker_swag_le_live_dir, primary_domain, 'chain.pem')
+subprocess.run(['openssl', 'x509', '-outform', 'der', '-in', chain_pem_path, '-out', ca_certificate_path], check=True)
+if certificate_debug:
+    print("INFO: Created chain.crt from chain.pem")
 
 # Current date
 current_date = datetime.utcnow()
@@ -146,10 +187,21 @@ syn.upload_cert(
     set_as_default=set_certificate_as_default
 )
 
+# Construct nginx systemctl command
+rc_nginx = f"systemctl {systemctl_nginx_cmd} nginx"
+print(f"INFO: Need to {systemctl_nginx_cmd} nginx, running {rc_nginx}")
+
+try:
+    subprocess.run(rc_nginx, shell=True, check=True)
+    print(f"Successfully ran: {rc_nginx}")
+except subprocess.CalledProcessError as e:
+    print(f"Error: {rc_nginx} failed with error: {e}")
+    sys.exit(1)  # Exit with a non-zero status on failure
+
 # Delete old certificate, we should probably delete any matching domain that isn't assigned
 # to any services
 
-# Delete current (now previous) certicate only if the uploaded cert is set as default
+# Delete current (now previous) cert only if the uploaded cert is set as default
 if set_certificate_as_default:
     syn.delete_certificate(current_certificate_id)
 
@@ -158,3 +210,10 @@ certificate_list = syn.list_cert()
 # Get new certificate id
 new_certificate_id = certificate_list["data"]["certificates"][0]["id"]
 print("New certificate ID:" + new_certificate_id)
+
+
+# Assuming UPLOAD_CERT_TIME is defined as a variable
+upload_cert_time_path = Path("/volume1/docker/swag/etc/letsencrypt/live/.upload-cert-time")
+
+# Create the file or update its timestamp
+upload_cert_time_path.touch()

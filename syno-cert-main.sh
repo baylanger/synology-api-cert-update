@@ -1,8 +1,5 @@
 #DRY_RUN="echo DRY_RUN"
 
-# TODO figure out if nginx reload is enough, otherwise issue a restart
-SYSTEMCTL_NGINX_CMD=reload
-
 SCRIPT_DIR=$(dirname $0)
 
 # Docker root install dir
@@ -26,29 +23,8 @@ UPLOAD_CERT_TIME=$SWAG_LE_LIVE_CERTS_DIR/.upload-cert-time
   echo "ERROR $SWAG_LE_LIVE_PRIVKEY_PEM_FILE no such file" && \
   exit 10
 
-[ ! -f $UPLOAD_CERT_TIME ] && /bin/touch -t 200001010000.00 $UPLOAD_CERT_TIME
-
-NEW_FILE=$(/bin/find -L $SWAG_LE_LIVE_PRIVKEY_PEM_FILE -newer $UPLOAD_CERT_TIME)
-if [ "$NEW_FILE" != "" ]; then
-  echo "INFO $DOMAIN certificate has rotated, trying to update certificate for all services"
-else
-  echo "INFO $DOMAIN certificate has not rotated yet, nothing to do"
-  exit 0
-fi
-
-echo "INFO create cert.crt file from cert.pem"
-/bin/openssl x509 -outform der -in $SWAG_LE_LIVE_CERTS_DIR/cert.pem -out $SWAG_LE_LIVE_CERTS_DIR/cert.crt
-echo "INFO create chain.crt file from chain.pem"
-/bin/openssl x509 -outform der -in $SWAG_LE_LIVE_CERTS_DIR/chain.pem -out $SWAG_LE_LIVE_CERTS_DIR/chain.crt
-
 echo "INFO running python3 $SCRIPT_DIR/update-syno-cert.py"
 $DRY_RUN python3 $SCRIPT_DIR/update-syno-cert.py
-
-# DSM 7 uses systemctl, make nginx use new certificate
-RC_NGINX="systemctl ${SYSTEMCTL_NGINX_CMD} nginx"
-echo "INFO need to ${SYSTEMCTL_NGINX_CMD} nxing, running $RC_NGINX"
-$DRY_RUN $RC_NGINX
-[ $? -ne 0 ] && ((EXIT_CODE++)) || true
 
 SWAG_LE_LIVE_PRIVKEY_PEM_MD5=$(cat $SWAG_LE_LIVE_PRIVKEY_PEM_FILE | md5sum | sed -e 's/ .*//g')
 
@@ -75,7 +51,5 @@ if [ -d $DOCKER_VOLUME_ROOT/adguard/config ]; then
 else
   echo "WARN directory $DOCKER_VOLUME_ROOT/adguard/config is missing"
 fi
-
-/bin/touch $UPLOAD_CERT_TIME
 
 exit $EXIT_CODE
