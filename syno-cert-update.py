@@ -19,7 +19,6 @@ import json
 import os
 import subprocess
 import sys
-import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from synology_api import core_certificate
@@ -42,7 +41,7 @@ cert_verify = connect_section.getboolean('cert_verify', False)
 dsm_version = connect_section.getint('dsm_version', 7)
 connect_debug = connect_section.getboolean('debug', False)
 if connect_debug:
-    print("connect =>", dict(connect_section), "\n")
+    print("DEBUG connect =>", dict(connect_section), "\n")
 
 # Accessing configuration values from [certificate] section
 certificate_section = config_settings['certificate']
@@ -52,18 +51,20 @@ days_to_expiration = certificate_section.getint('days_to_expiration', 1)
 set_certificate_as_default = certificate_section.getboolean('set_certificate_as_default', True)
 certificate_debug = certificate_section.get('debug', False)
 if certificate_debug:
-    print("certificate =>", dict(certificate_section), "\n")
+    print("DEBUG certificate =>", dict(certificate_section), "\n")
 
 # Accessing configuration values from [docker] section
 docker_section = config_settings['docker']
 docker_swag_le_live_dir = docker_section.get('docker_swag_le_live_dir')
 docker_debug = docker_section.get('debug', False)
 if docker_debug:
-    print("docker =>", dict(docker_section), "\n")
+    print("DEBUG docker =>", dict(docker_section), "\n")
 
-# Retrieve SYSTEMCTL_NGINX_CMD from the ini file
+# Accessing configuration values from [control] section
 control_section = config_settings['control']
 systemctl_nginx_cmd = control_section.get('systemctl_nginx_cmd', 'reload')
+if docker_debug:
+    print("DEBUG control =>", dict(control_section), "\n")
 
 # Set or don't set wildcard_domain var
 if have_wildcard_domain:
@@ -77,137 +78,160 @@ server_certificate_path = Path(docker_swag_le_live_dir) / primary_domain / "cert
 ca_certificate_path = Path(docker_swag_le_live_dir) / primary_domain / "chain.crt"
 upload_cert_time_path = Path(docker_swag_le_live_dir) / ".upload-cert-time"
 if certificate_debug:
-    print(f"INFO: Private Key Path: {private_key_path}")
-    print(f"INFO: Server Certificate Path: {server_certificate_path}")
-    print(f"INFO: CA Certificate Path: {ca_certificate_path}")
-    print(f"INFO: Upload Certificate Time Path: {upload_cert_time_path}")
+    print(f"DEBUG Private Key Path {private_key_path}")
+    print(f"DEBUG Server Certificate Path {server_certificate_path}")
+    print(f"DEBUG CA Certificate Path {ca_certificate_path}")
+    print(f"DEBUG Upload Certificate Time Path {upload_cert_time_path}")
 
-# Ensure .upload-cert-time file exists with an old timestamp if not already present
-if not upload_cert_time_path.exists():
-    os.system(f"/bin/touch -t 200001010000.00 {upload_cert_time_path}")
-    print(f"INFO: Created .upload-cert-time file with timestamp 200001010000.00")
+# Ensure .upload-cert-time file exists, otherwise create it
+def touch_upload_cert_time_file():
+    if not upload_cert_time_path.exists():
+        os.system(f"/bin/touch -t 200001010000.00 {upload_cert_time_path}")
+        print(f"INFO Created {upload_cert_time_path} with timestamp 200001010000.00")
 
-# Check if current privkey.pem is newer than .upload-cert-time
-if private_key_path.exists() and private_key_path.stat().st_mtime > upload_cert_time_path.stat().st_mtime:
-    print(f"INFO: {primary_domain} certificate has rotated, proceeding to update certificate for all services")
-else:
-    print(f"INFO: {primary_domain} certificate has not rotated yet, nothing to do")
-    sys.exit(0)
+# Check if the certificate has rotated
+def check_certificate_rotation():
+    # Check if current privkey.pem is newer than .upload-cert-time
+    if private_key_path.exists() and private_key_path.stat().st_mtime > upload_cert_time_path.stat().st_mtime:
+        print(f"INFO {primary_domain} certificate has rotated, proceeding to update certificate for all services")
+    else:
+        print(f"INFO {primary_domain} certificate has not rotated yet, nothing to do")
+        sys.exit(0)
 
-# Create cert.crt from cert.pem
-cert_pem_path = os.path.join(docker_swag_le_live_dir, primary_domain, 'cert.pem')
-subprocess.run(['openssl', 'x509', '-outform', 'der', '-in', cert_pem_path, '-out', server_certificate_path], check=True)
-if certificate_debug:
-    print("INFO: Created cert.crt from cert.pem")
+# Generate certificates (cert.crt and chain.crt)
+def generate_certificates():
+    cert_pem_path = os.path.join(docker_swag_le_live_dir, primary_domain, 'cert.pem')
+    subprocess.run(['openssl', 'x509', '-outform', 'der', '-in', cert_pem_path, '-out', server_certificate_path], check=True)
+    print("INFO Created cert.crt from cert.pem")
 
-# Create chain.crt from chain.pem
-chain_pem_path = os.path.join(docker_swag_le_live_dir, primary_domain, 'chain.pem')
-subprocess.run(['openssl', 'x509', '-outform', 'der', '-in', chain_pem_path, '-out', ca_certificate_path], check=True)
-if certificate_debug:
-    print("INFO: Created chain.crt from chain.pem")
+    chain_pem_path = os.path.join(docker_swag_le_live_dir, primary_domain, 'chain.pem')
+    subprocess.run(['openssl', 'x509', '-outform', 'der', '-in', chain_pem_path, '-out', ca_certificate_path], check=True)
+    print("INFO Created chain.crt from chain.pem")
 
-# Current date
-current_date = datetime.utcnow()
-expiration_date = current_date + timedelta(days=days_to_expiration)
+# Initialize connection to Synology
+def init_synology_connection():
+    return core_certificate.Certificate(
+        hostname,
+        port,
+        username,
+        password,
+        secure,
+        cert_verify,
+        dsm_version,
+        connect_debug
+    )
 
-# Function to convert string date to datetime object
+# Parse "valid_till" field to datetime
 def parse_valid_till(date_str):
     return datetime.strptime(date_str, "%b %d %H:%M:%S %Y GMT")
 
-# Create syn object to communicate with your server
-syn = core_certificate.Certificate(
-    hostname,
-    port,
-    username,
-    password,
-    secure,
-    cert_verify,
-    dsm_version,
-    connect_debug
-)
+# Upload the new certificate
+def upload_new_certificate(syn):
+    print("INFO calling syn.upload certificate")
+    syn.upload_cert(
+        serv_key=private_key_path,
+        ser_cert=server_certificate_path,
+        ca_cert=ca_certificate_path,
+        set_as_default=set_certificate_as_default
+    )
+    print("INFO syn.upload certificate success")
 
-# Request current certificates list
-certificate_list = syn.list_cert()
-print(json.dumps(certificate_list, indent=4))
+# Nginx reload or restart
+def systemctl_nginx():
+    rc_nginx = f"systemctl {systemctl_nginx_cmd} nginx"
+    try:
+        print(f"INFO running {rc_nginx}")
+        subprocess.run(rc_nginx, shell=True, check=True)
+        print(f"INFO {rc_nginx} success")
+    except subprocess.CalledProcessError as e:
+        print(f"ERROR {rc_nginx} failed with error {e}")
+        sys.exit(1)  # Exit with a non-zero status on failure
 
-# Extract expired certificate IDs
-expired_ids = [
-    cert['id'] for cert in certificate_list['data']['certificates'] if parse_valid_till(cert['valid_till']) < current_date
-]
-# Print list of expired certificate IDs
-print(f"Expired Certificate IDs: {expired_ids}")
+# Cleanup certificates if needed
+def cleanup_certificates(syn, set_certificate_as_default, current_certificate_ids):
+    if set_certificate_as_default:
+        print(f"INFO calling delete_certificate {current_certificate_ids}, may take a while to complete")
+        syn.delete_certificate(current_certificate_ids)
+        print(f"INFO delete_certificate {current_certificate_ids} success")
 
-# Extract certificates expiring before expiration_date and matching domain
-expiring_soon_and_matching_domains = [
-    cert['id'] for cert in certificate_list['data']['certificates']
-    if current_date <= parse_valid_till(cert['valid_till']) <= expiration_date
-    and any(domain in primary_domain or domain in wildcard_domain for domain in cert['subject']['sub_alt_name'])
-]
-# Print list of certificates expiring
-print(f"Certificates expiring before {expiration_date} and matching domains: {expiring_soon_and_matching_domains}")
+# Main execution flow
+def main():
 
-# Filter and get list where 'sub_alt_name' matches the primary or wildcard domain
-# and 'services' is not empty
-current_certificate_ids = [
-    cert['id'] for cert in certificate_list['data']['certificates']
-    if (primary_domain in cert['subject']['sub_alt_name'] or wildcard_domain in cert['subject']['sub_alt_name'])
-    and cert['services']
-]
-print("Current certificate IDs" + str(current_certificate_ids))
+    # Touch .upload-cert-time if file not present
+    touch_upload_cert_time_file()
 
-# Extract certificates where is_broken is True
-current_broken_certificates = [cert for cert in certificate_list['data']['certificates'] if cert['is_broken']]
-print("Current broken certificates:" + str(current_broken_certificates))
+    # Check if the certificate has rotated
+    check_certificate_rotation()
 
-# Filter and get list of 'id' where 'services' is empty
-empty_service_ids = [cert['id'] for cert in certificate_list['data']['certificates'] if not cert['services']]
-print("Certificate not assigned to any service:" + str(empty_service_ids))
+    # Generate cert.crt and chain.crt
+    generate_certificates()
 
-# Filter and get list of 'id' where 'sub_alt_name' matches the primary or wildcard domain and 'services' is empty
-ids_matching_domains_with_no_services = [
-    cert['id'] for cert in certificate_list['data']['certificates']
-    if (primary_domain in cert['subject']['sub_alt_name'] or wildcard_domain in cert['subject']['sub_alt_name'])
-    and not cert['services']  # Check if services is empty
-]
-print("Certificate matching primary_domain or wildcard_domain but not assigned to any service:" + str(ids_matching_domains_with_no_services))
+    # Initialize connection to Synology API
+    syn = init_synology_connection()
 
-# Upload new certificate
-syn.upload_cert(
-    serv_key=private_key_path,
-    ser_cert=server_certificate_path,
-    ca_cert=ca_certificate_path,
-    set_as_default=set_certificate_as_default
-)
+    # Fetch the current certificates list
+    certificate_list = syn.list_cert()
 
-# Construct nginx systemctl command
-rc_nginx = f"systemctl {systemctl_nginx_cmd} nginx"
-print(f"INFO: Need to {systemctl_nginx_cmd} nginx, running {rc_nginx}")
+    # Current date for certificate expiration checking
+    current_date = datetime.utcnow()
+    expiration_date = current_date + timedelta(days=days_to_expiration)
 
-try:
-    subprocess.run(rc_nginx, shell=True, check=True)
-    print(f"Successfully ran: {rc_nginx}")
-except subprocess.CalledProcessError as e:
-    print(f"ERROR: {rc_nginx} failed with error: {e}")
-    sys.exit(1)  # Exit with a non-zero status on failure
+    # Extract expired certificate IDs
+    expired_ids = [
+        cert['id'] for cert in certificate_list['data']['certificates'] if parse_valid_till(cert['valid_till']) < current_date
+    ]
+    print(f"Expired Certificate IDs {expired_ids}")
 
-# Delete old certificate, we should probably delete any matching domain that isn't assigned
-# to any services
+    # Extract certificates expiring before expiration_date and matching domain
+    expiring_soon_and_matching_domains = [
+        cert['id'] for cert in certificate_list['data']['certificates']
+        if current_date <= parse_valid_till(cert['valid_till']) <= expiration_date
+        and any(domain in primary_domain or domain in wildcard_domain for domain in cert['subject']['sub_alt_name'])
+    ]
+    print(f"Certificates expiring in {days_to_expiration} days and matching domains {expiring_soon_and_matching_domains}")
 
-# Delete current (now previous) cert only if the uploaded cert is set as default
-if set_certificate_as_default:
-    syn.delete_certificate(current_certificate_ids)
-    print(f"INFO: deleted previous certificate")
+    # Filter and get list where 'sub_alt_name' matches the primary or wildcard domain
+    # and 'services' is not empty
+    current_certificate_ids = [
+        cert['id'] for cert in certificate_list['data']['certificates']
+        if (primary_domain in cert['subject']['sub_alt_name'] or wildcard_domain in cert['subject']['sub_alt_name'])
+        and cert['services']
+    ]
+    print("Current certificate IDs" + str(current_certificate_ids))
 
-# Get latest certificates list
-certificate_list = syn.list_cert()
+    # Extract certificates where is_broken is True
+    current_broken_certificates = [cert for cert in certificate_list['data']['certificates'] if cert['is_broken']]
+    print("Current broken certificates:" + str(current_broken_certificates))
 
-# Get new certificate id
-new_certificate_id = certificate_list["data"]["certificates"][0]["id"]
-print("New certificate ID:" + new_certificate_id)
+    # Filter and get list of 'id' where 'services' is empty
+    empty_service_ids = [cert['id'] for cert in certificate_list['data']['certificates'] if not cert['services']]
+    print("Certificate not assigned to any service:" + str(empty_service_ids))
 
+    # Filter and get list of 'id' where 'sub_alt_name' matches the primary or wildcard domain and 'services' is empty
+    ids_matching_domains_with_no_services = [
+        cert['id'] for cert in certificate_list['data']['certificates']
+        if (primary_domain in cert['subject']['sub_alt_name'] or wildcard_domain in cert['subject']['sub_alt_name'])
+        and not cert['services']  # Check if services is empty
+    ]
+    print("Certificate matching primary_domain or wildcard_domain but not assigned to any service:" + str(ids_matching_domains_with_no_services))
 
-# Assuming UPLOAD_CERT_TIME is defined as a variable
-upload_cert_time_path = Path("/volume1/docker/swag/etc/letsencrypt/live/.upload-cert-time")
+    # Upload the new certificate
+    upload_new_certificate(syn)
 
-# Create the file or update its timestamp
-upload_cert_time_path.touch()
+    # Reload Nginx
+    systemctl_nginx()
+
+    # Get the latest certificate ID
+    certificate_list = syn.list_cert()
+    new_certificate_id = certificate_list["data"]["certificates"][0]["id"]
+    print(f"INFO New certificate ID {new_certificate_id}")
+
+    # Create the upload-cert-time file or update its timestamp
+    upload_cert_time_path.touch()
+
+    # Clean up certificates
+    cleanup_certificates(syn, set_certificate_as_default, current_certificate_ids)
+
+# Run the main function
+if __name__ == '__main__':
+    main()
