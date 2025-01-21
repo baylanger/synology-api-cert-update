@@ -8,14 +8,24 @@ Work In Progress, the current code doesn't do exactly what you probably want. St
 
 # Installation
 
-## Synology-API
+## Connect to your Synology NAS and become root
 ```
-- Requires https://github.com/N4S4/synology-api/
-  - Download zip file
-    wget https://github.com/N4S4/synology-api/archive/refs/heads/master.zip
-  - Unzip
-    7z x master.zip
-  - Install synology-api
-    cd synology-api-master
-    python3 setup.py install --force
+ssh youradmin_user@your_nas
+sudo su -
+```
+
+## Install Synology-API from https://github.com/N4S4/synology-api/
+```
+- Download zip file
+  wget https://github.com/N4S4/synology-api/archive/refs/heads/master.zip
+- Unzip
+  7z x master.zip
+- Install synology-api
+  cd synology-api-master
+  python3 setup.py install --force
+```
+
+## Install this project
+```
+... WIP ...
 ```
