@@ -23,7 +23,7 @@ Pick either first or second option.
 The following curl command downloads a shell script and runs it. The script installs or updates N4S4/synology-api and baylanger/synology-api-cert-update
 
 ```
-curl -s https://https://raw.githubusercontent.com/baylanger/synology-api-cert-update/refs/heads/main/install.sh | bash
+curl -s -o- https://raw.githubusercontent.com/baylanger/synology-api-cert-update/refs/heads/main/install.sh | bash
 ```
 
 ### 2.2 Manual install or update
