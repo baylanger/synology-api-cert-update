@@ -3,7 +3,7 @@ set -e
 SYNO_API_ZIP=synology-api.zip
 SYNO_API_MASTER=synology-api-master
 SYNO_API_CERT_UPDATE_ZIP=synology-api-cert-update.zip
-SYNO_API_CERT_UPDATE_MAIN=synology-api-cert-update-MAIN
+SYNO_API_CERT_UPDATE_MAIN=synology-api-cert-update-main
 
 NOCOLOR='\033[0m'
 GREEN='\033[0;32m'
@@ -19,7 +19,7 @@ wget -q https://github.com/N4S4/synology-api/archive/refs/heads/master.zip -O $S
 
 # Install synology-api (unzip, delete zip file, install)
 echo -e "$GREEN Running 7z to extract $SYNO_API_ZIP $NOCOLOR"
-7z x -bso0 $SYNO_API_ZIP
+7z x -y -bso0 $SYNO_API_ZIP
 # Install synology-api, you might see warnings but the install should complete
 cd synology-api-master
 echo -e "$GREEN Running python3 setup.py install --force $NOCOLOR"
@@ -32,10 +32,18 @@ cd ..
 [ -d $SYNO_API_CERT_UPDATE_MAIN ] && /usr/bin/rm -rf $SYNO_API_CERT_UPDATE_MAIN
 
 # Download synology-api-cert-update
-echo -e "$GREEN Downloading https://github.com/baylanger/synology-api-cert-update/archive/refs/heads/master.zip $NOCOLOR"
-wget -q https://github.com/baylanger/synology-api-cert-update/archive/refs/heads/master.zip -O $SYNO_API_CERT_UPDATE_ZIP
+echo -e "$GREEN Downloading https://github.com/baylanger/synology-api-cert-update/archive/refs/heads/main.zip $NOCOLOR"
+wget -q https://github.com/baylanger/synology-api-cert-update/archive/refs/heads/main.zip -O $SYNO_API_CERT_UPDATE_ZIP
 
 # Install synology-api-cert-update (unzip, delete zip file, install)
 echo -e "$GREEN Running 7z to extract $SYNO_API_CERT_UPDATE_ZIP $NOCOLOR"
-7z -bso0 x $SYNO_API_CERT_UPDATE_ZIP
+7z x -y -bso0 $SYNO_API_CERT_UPDATE_ZIP
 /usr/bin/rm $SYNO_API_CERT_UPDATE_ZIP
+
+# Rename directory synology-api-cert-update-main to synology-api-cert-update, 1st time install
+# OR copy required files without overwriting the .ini file
+if [ ! -d synology-api-cert-update ]; then
+  mv $SYNO_API_CERT_UPDATE_MAIN synology-api-cert-update
+else
+  mv $SYNO_API_CERT_UPDATE_MAIN/{*.py,*.sh,LICENSE,README.md} synology-api-cert-update
+fi
