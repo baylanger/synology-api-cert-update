@@ -10,7 +10,7 @@ Work In Progress, the current code doesn't do exactly what you probably want. St
 
 ## Connect to your Synology NAS and become root
 ```
-ssh youradmin_user@your_nas
+ssh youradmin_user@your_nas_hostname_or_ipaddress
 sudo su -
 ```
 
