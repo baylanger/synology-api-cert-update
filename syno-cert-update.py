@@ -203,7 +203,7 @@ except subprocess.CalledProcessError as e:
 
 # Delete current (now previous) cert only if the uploaded cert is set as default
 if set_certificate_as_default:
-    syn.delete_certificate(current_certificate_id)
+    syn.delete_certificate(current_certificate_ids)
 
 # Get latest certificates list
 certificate_list = syn.list_cert()
