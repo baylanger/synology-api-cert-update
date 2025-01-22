@@ -1,19 +1,4 @@
 #!/usr/bin/python3
-#
-#
-#  WORK IN PROGRESS
-#  ----------------
-#
-#
-# Requires https://github.com/N4S4/synology-api/
-#   Download zip file
-#     wget https://github.com/N4S4/synology-api/archive/refs/heads/master.zip
-#   Unzip
-#     7z x master.zip
-#   Install synology-api
-#     cd synology-api-master
-#     python3 setup.py install --force
-#
 import configparser
 import json
 import os
