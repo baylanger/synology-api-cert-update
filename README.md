@@ -70,3 +70,7 @@ At minimum you should make the following changes and make sure all of the remain
 ## 4. Add a task scheduler for the script to automatically run
 
 Using your Synology UI add a schedule tasks to run this script at least once a day.
+
+```
+python3 ~youradmin_user/synology-api-cert-update/syno-cert-update.py
+```
