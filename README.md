@@ -15,7 +15,7 @@ sudo su -
 cd ~youradmin_user
 ```
 
-WARNING : Make sure you cd into the directory of your admin user. If you don't the installation will likely run in /root and on a Synology update you will lose everything including your customized settings in the syno-cert-update.ini file.
+WARNING : Make sure you `cd` into the directory of `youradmin_user` or a "proper" directory. If you don't, on a Synology update you could lose your customized settings (syno-cert-update.ini) as well as other files related to this project.
 
 ## 2. Install synology-api and synology-api-cert-update
 
