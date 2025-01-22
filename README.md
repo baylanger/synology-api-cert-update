@@ -4,7 +4,7 @@ Everything is Work In Progress, the current code doesn't do exactly what you pro
 
 Uses Synology API with the help of [N4S4/synology-api](https://github.com/N4S4/synology-api)
 
-Currently the scripts uses certificate located in a Docker swag instance running on the same Synology server. Planning to 
+Currently the scripts uses certificate located in a Docker swag instance running on the same Synology server.
 
 # Installation
 
@@ -16,11 +16,15 @@ sudo su -
 
 ## 2. Install synology-api and synology-api-cert-update
 
-Pick either first or second option.
+First option (2.1) is automated.
+
+Second option (2.2) is manual.
 
 ### 2.1 Install or update via shell script (automatic)
 
-The following curl command downloads the install.sh script and runs it. The script installs or updates N4S4/synology-api and baylanger/synology-api-cert-update
+The following `curl` command downloads the `install.sh` script from this repo and runs it. The script installs or updates N4S4/synology-api and baylanger/synology-api-cert-update.
+
+It will not overwrite your configuration fine but if there are changes, it will show them and you need to manually make the changes.
 
 ```
 curl -s -o- https://raw.githubusercontent.com/baylanger/synology-api-cert-update/refs/heads/main/install.sh | bash
@@ -47,6 +51,19 @@ wget https://github.com/baylanger/synology-api-cert-update/archive/refs/heads/ma
 7z x master.zip && rm master.zip
 ```
 
-## 3. Add cron to your NAS
+## 3. Configuration
+
+Edit the syno-cert-update.ini file and set the values appropriately.
+
+At minimum you should make the following changes and make sure all of the remaining settings are valid for your setup:
+- hostname
+- username
+- password
+- primary_domain
+- have_wildcard_domain - set to false if you don't have a wildcard certificate
+- set_certificate_as_default - should stay true if you want the old certificate to be automatically eplaced in your NAS
+- docker_swag_le_live_dir
+
+## 4. Add a task scheduler for the script to automatically run
 
 Using your Synology UI add a schedule tasks to run this script at least once a day.
