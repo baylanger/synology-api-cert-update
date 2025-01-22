@@ -23,6 +23,12 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from synology_api import core_certificate
 
+# Get the directory where the script is located
+script_dir_location = os.path.dirname(os.path.realpath(__file__))
+
+# Change the current working directory to the script directory
+os.chdir(script_dir)
+
 # Path to configuration file
 config_ini_file = 'syno-cert-update.ini'
 
