@@ -18,9 +18,9 @@ sudo su -
 
 Pick either first or second option.
 
-### 2.1 Install or update via shell script
+### 2.1 Install or update via shell script (automatic)
 
-The following curl command downloads a shell script and runs it. The script installs or updates N4S4/synology-api and baylanger/synology-api-cert-update
+The following curl command downloads the install.sh script and runs it. The script installs or updates N4S4/synology-api and baylanger/synology-api-cert-update
 
 ```
 curl -s -o- https://raw.githubusercontent.com/baylanger/synology-api-cert-update/refs/heads/main/install.sh | bash
