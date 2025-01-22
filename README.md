@@ -61,7 +61,7 @@ At minimum you should make the following changes and make sure all of the remain
 - password
 - primary_domain
 - have_wildcard_domain - set to false if you don't have a wildcard certificate
-- set_certificate_as_default - should stay true if you want the old certificate to be automatically eplaced in your NAS
+- set_certificate_as_default - should stay true if you want the old certificate to be automatically replaced in your NAS' config.
 - docker_swag_le_live_dir
 
 ## 4. Add a task scheduler for the script to automatically run
