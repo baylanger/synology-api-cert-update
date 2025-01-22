@@ -8,11 +8,14 @@ Currently the scripts uses certificate located in a Docker swag instance running
 
 # Installation
 
-## 1. Connect to your Synology NAS and become root
+## 1. Connect to your Synology NAS
 ```
 ssh youradmin_user@your_nas_hostname_or_ipaddress
 sudo su -
+cd ~youradmin_user
 ```
+
+WARNING : Make sure you cd into the directory of your admin user. If you don't the installation will likely run in /root and on a Synology update you will lose everything including your customized settings in the syno-cert-update.ini file.
 
 ## 2. Install synology-api and synology-api-cert-update
 
